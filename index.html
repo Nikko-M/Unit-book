@@ -155,7 +155,7 @@ button,input,select{font-family:inherit}
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);padding:0;overflow:hidden}
 .stat{background:var(--surface);padding:16px 18px;min-width:0}
-.stat .val{font:700 30px/1.05 var(--display);letter-spacing:-.025em;margin-top:7px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stat .val{font:700 30px/1.05 var(--display);letter-spacing:-.025em;margin-top:7px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow-wrap:normal}
 .stat .sub{margin-top:5px;font-size:13.5px;color:var(--muted)}
 @media (min-width:720px){.stats{grid-template-columns:repeat(4,1fr)}}
 
@@ -296,10 +296,34 @@ button,input,select{font-family:inherit}
 .notes-line{white-space:pre-line}
 
 /* Tabs */
+/* Narrow screens: a scrolling strip of tabs along the top */
 .tabs{display:flex;gap:22px;border-bottom:1px solid var(--line);margin:-4px 0 18px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{position:relative;flex:none;white-space:nowrap;height:46px;border:0;background:none;padding:0 2px;color:var(--muted);font:600 16px var(--sans);cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-bottom:2.5px solid transparent;margin-bottom:-1px}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.nav-head,.nav-ic,.lbl-short{display:none}
+.views{min-width:0}
+
+/* Wide screens: a left rail instead */
+@media (min-width:900px){
+  .shell{display:grid;grid-template-columns:216px minmax(0,1fr);gap:30px;align-items:start}
+  .tabs{display:block;border-bottom:0;overflow:visible;margin:0;position:sticky;top:18px;
+    border-right:1px solid var(--line);padding-right:14px}
+  .nav-head{display:block;margin:2px 0 8px 10px;font-size:11.5px;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted)}
+  .tabs button{display:flex;width:100%;height:auto;min-height:40px;padding:8px 12px;margin:0 0 2px;
+    border-bottom:0;border-radius:10px;font-size:14.5px;text-align:left;gap:11px;white-space:normal}
+  .tabs button:hover{background:var(--surface-2);color:var(--ink)}
+  .tabs button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+  .tabs button[aria-selected="true"]{background:var(--surface-2);color:var(--ink);border-bottom-color:transparent}
+  .nav-ic{display:flex;flex:none;width:19px;height:19px;align-items:center;justify-content:center}
+  .nav-ic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .nav-lbl{flex:1 1 auto;min-width:0}
+  .lbl-long{display:none}
+  .lbl-short{display:inline}
+  .tabs .tab-count{flex:none}
+}
 .tab-count{min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--loss-bg);color:var(--loss);font-size:12.5px;font-weight:700;display:inline-grid;place-items:center}
 .tab-count:empty{display:none}
 
@@ -459,14 +483,17 @@ button,input,select{font-family:inherit}
     </div>
   </header>
 
-  <div class="tabs" role="tablist" aria-label="Views">
-    <button type="button" role="tab" id="tab-bets" aria-controls="view-bets" aria-selected="true" data-tab="bets">Bets</button>
-    <button type="button" role="tab" id="tab-history" aria-controls="view-history" aria-selected="false" data-tab="history" tabindex="-1">History <span class="tab-count" id="tab-history-count"></span></button>
-    <button type="button" role="tab" id="tab-players" aria-controls="view-players" aria-selected="false" data-tab="players" tabindex="-1">Player check list <span class="tab-count" id="tab-players-count"></span></button>
-    <button type="button" role="tab" id="tab-class" aria-controls="view-class" aria-selected="false" data-tab="class" tabindex="-1">Classifications</button>
-  </div>
-
   <div class="banner" id="banner" role="status" hidden></div>
+
+  <div class="shell">
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <p class="nav-head">Views</p>
+    <button type="button" role="tab" id="tab-bets" aria-controls="view-bets" aria-selected="true" data-tab="bets"><span class="nav-ic" aria-hidden="true"></span><span class="nav-lbl">Bets</span></button>
+    <button type="button" role="tab" id="tab-history" aria-controls="view-history" aria-selected="false" data-tab="history" tabindex="-1"><span class="nav-ic" aria-hidden="true"></span><span class="nav-lbl">History</span> <span class="tab-count" id="tab-history-count"></span></button>
+    <button type="button" role="tab" id="tab-players" aria-controls="view-players" aria-selected="false" data-tab="players" tabindex="-1"><span class="nav-ic" aria-hidden="true"></span><span class="nav-lbl"><span class="lbl-long">Player check list</span><span class="lbl-short">Players</span></span> <span class="tab-count" id="tab-players-count"></span></button>
+    <button type="button" role="tab" id="tab-class" aria-controls="view-class" aria-selected="false" data-tab="class" tabindex="-1"><span class="nav-ic" aria-hidden="true"></span><span class="nav-lbl">Classifications</span></button>
+  </nav>
+  <div class="views">
 
   <div id="view-bets" role="tabpanel" aria-labelledby="tab-bets">
 
@@ -575,6 +602,8 @@ button,input,select{font-family:inherit}
     <p class="form-error" id="cls-error" role="alert"></p>
     <div class="cls-list" id="cls-list"></div>
   </section>
+  </div>
+  </div>
 </div>
 
 <div class="fab-bar">
@@ -888,7 +917,11 @@ const ICON={
   moon:'<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>',
   auto:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
   close:'<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-  refresh:'<svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 1 0-.7 4.2"/><path d="M20 4.5v6h-6"/></svg>'
+  refresh:'<svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 1 0-.7 4.2"/><path d="M20 4.5v6h-6"/></svg>',
+  navBets:'<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 9h9M7.5 13h6"/></svg>',
+  navHistory:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.5V12l3 1.8"/></svg>',
+  navPlayers:'<svg viewBox="0 0 24 24"><circle cx="9.5" cy="8.5" r="3.2"/><path d="M3.8 19.5a5.7 5.7 0 0 1 11.4 0"/><path d="M16.5 11.8a3 3 0 0 0 0-6"/><path d="M17.4 14.6a5.2 5.2 0 0 1 3 4.9"/></svg>',
+  navClass:'<svg viewBox="0 0 24 24"><path d="M4 6.5h4.5l1.8 2.2H20v8.8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><path d="M4 6.5V5"/></svg>'
 };
 
 /* ---------- state ---------- */
@@ -2672,6 +2705,8 @@ async function init(){
   stakeChips();
   $('#btn-settings').innerHTML=ICON.sliders;
   $('#btn-refresh').innerHTML=ICON.refresh;
+  const NAV_IC={bets:ICON.navBets,history:ICON.navHistory,players:ICON.navPlayers,class:ICON.navClass};
+  $$('.tabs button').forEach(b=>{const ic=$('.nav-ic',b);if(ic)ic.innerHTML=NAV_IC[b.dataset.tab]||''});
   $$('.sheet-head .icon-btn').forEach(b=>{b.innerHTML=ICON.close});
   try{const t=localStorage.getItem('unitbook-tab');if(t==='players'||t==='class')state.tab=t}catch(e){}
   setTab(state.tab);

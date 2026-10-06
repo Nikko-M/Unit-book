@@ -1,0 +1,6 @@
+# Personal betting exports — keep these off GitHub
+my-bets-backup.json
+*-backup.json
+.DS_Store
+node_modules/
+*.log

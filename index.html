@@ -2788,7 +2788,8 @@ function tidyName(t){
   let out=String(t||'').replace(/^[^\w(]+/,'').replace(/\s+/g,' ').trim();
   out=out.replace(/^(?:[^\w\s]\S{0,2}\s+)/,'');
   const m=out.match(/^(\S{1,2})\s+(\S.*)$/);
-  if(m&&!/^\d/.test(m[1])&&!/^(at|in|to|on|vs|v|no|up)$/i.test(m[1])&&!/[a-z]{2}/.test(m[1]))out=m[2];
+  if(m&&!/^(at|in|to|on|vs|v|no|up)$/i.test(m[1])&&!/[a-z]{2}/.test(m[1])
+    &&(!/^\d/.test(m[1])||/^[A-Za-z]/.test(m[2])))out=m[2];
   return out.replace(/^[^\w(]+/,'').trim();
 }
 function legHasSubstance(l){
@@ -3277,12 +3278,14 @@ function applyScan(bet){
   let sel=bet.selection||'';
   if(sel&&bet.event&&sel.toLowerCase().indexOf(bet.event.toLowerCase())<0)sel=sel+' \u2014 '+bet.event;
   if(multi){
-    const names=bet.legs.map(l=>tidyName(l.player||l.market||'')).filter(Boolean);
     const n=bet.legCount||bet.legs.length;
     sel=(bet.betType||'Multi')+' ('+n+' legs)';
     if(bet.event&&!multiEvents(bet))sel+=': '+bet.event;
-    else if(names.length)sel+=': '+names.join(', ');
-    if(sel.length>150)sel=sel.slice(0,147).replace(/[,\s]+$/,'')+'\u2026';
+    if(bet.legs.length)setLegEditor(bet.legs.map(l=>({
+      player:tidyName(l.player||''),
+      market:tidyName(l.market||''),
+      result:l.result||'pending'
+    })));
     found.push(n+' legs');
   }else if(!sel&&bet.legs.length===1){
     const l=bet.legs[0];

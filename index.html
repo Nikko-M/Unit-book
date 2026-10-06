@@ -2782,6 +2782,15 @@ function isChrome(t){
 }
 /* A leg needs a name or a market with something in it; anything shorter is
    page furniture that survived the column clean. */
+/* The small sport icon beside each selection comes through OCR as a stray glyph
+   -- U, [>, S|, (c) and so on. Strip that without eating a real initial. */
+function tidyName(t){
+  let out=String(t||'').replace(/^[^\w(]+/,'').replace(/\s+/g,' ').trim();
+  out=out.replace(/^(?:[^\w\s]\S{0,2}\s+)/,'');
+  const m=out.match(/^(\S{1,2})\s+(\S.*)$/);
+  if(m&&!/^\d/.test(m[1])&&!/^(at|in|to|on|vs|v|no|up)$/i.test(m[1])&&!/[a-z]{2}/.test(m[1]))out=m[2];
+  return out.replace(/^[^\w(]+/,'').trim();
+}
 function legHasSubstance(l){
   const p=(l.player||'').trim(),m=(l.market||'').trim();
   if(isChrome(p+' '+m))return false;
@@ -2952,7 +2961,7 @@ function parseSlip(lines,icons,img,scale){
   const tl=lines.find(l=>/(Same Game Multi|Multi|Single|Double|Treble|Trixie|Parlay)/i.test(l.text));
   if(tl){const m=tl.text.match(/(Same Game Multi|Multi|Single|Double|Treble|Trixie|Parlay)/i);
     out.betType=m[1].replace(/\b\w/g,c=>c.toUpperCase())}
-  const lc=text.match(/(\d{1,2})\s*Legs?\b/i);if(lc)out.legCount=+lc[1];
+  const lc=text.match(/\b(\d{1,2})\s*L[eo][gqo]s?\b/i);if(lc)out.legCount=+lc[1];
   const ev=lines.find(l=>/\s(vs?|@)\s/i.test(l.text)&&!/@\s*\d/.test(l.text));
   if(ev)out.event=ev.text.trim();
   const pr=text.match(/Potential\s*Return\s*[:\-]?\s*[\$S]\s*(\d[\d,]*\.\d{2})/i);
@@ -3041,13 +3050,13 @@ function parseSlip(lines,icons,img,scale){
         let t=l.words.filter(wd=>wd!==p.word&&wd.bbox.x0<rightEdge*0.72).map(wd=>wd.text).join(' ').trim();
         return t;
       }).filter(t=>t&&!isChrome(t));
-      const selection=(texts[0]||'').trim();
+      const selection=tidyName(texts[0]||'');
       const event=(texts.find(t=>EVENT.test(t))||'').trim();
       let market='';
       for(let j=1;j<texts.length;j++){
         const t=texts[j];
         if(t===event||EVENT.test(t)||TIMEY.test(t))continue;
-        market=t;break;
+        market=tidyName(t);break;
       }
       const isLine=/^(over|under|o\/u|\+|-|\d)/i.test(selection);
       const player=isLine?'':selection;
@@ -3263,12 +3272,12 @@ function applyScan(bet){
   /* Only the odds, the stake and what the bet was. Leg by leg detail is left
      alone -- live scores and progress rows made it more noise than help, and the
      legs editor is still there by hand when a leg actually needs tracking. */
-  setBetType('single');
-  const multi=bet.legs.length>1;
+  const multi=bet.legs.length>1||(bet.legCount||0)>1;
+  setBetType(multi?'multi':'single');
   let sel=bet.selection||'';
   if(sel&&bet.event&&sel.toLowerCase().indexOf(bet.event.toLowerCase())<0)sel=sel+' \u2014 '+bet.event;
   if(multi){
-    const names=bet.legs.map(l=>(l.player||l.market||'').trim()).filter(Boolean);
+    const names=bet.legs.map(l=>tidyName(l.player||l.market||'')).filter(Boolean);
     const n=bet.legCount||bet.legs.length;
     sel=(bet.betType||'Multi')+' ('+n+' legs)';
     if(bet.event&&!multiEvents(bet))sel+=': '+bet.event;

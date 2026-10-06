@@ -125,9 +125,11 @@ then drops what it found into the normal bet form for you to check before loggin
 Nothing is uploaded and no API key is involved; the recogniser downloads once
 from a CDN and is then cached by the browser.
 
-It reads the bookmaker, date, sport, selection, odds, stake, and for a multi each
-leg's player and market. Where a slip has already settled it also reads the green
-ticks and red crosses beside each leg, so the legs come in already marked.
+It reads the bookmaker, date, sport, odds, stake and what the bet was. A multi
+comes in as one bet named for the match it is on, or for its selections when the
+legs span different matches -- the odds and the stake are what the P/L turns on,
+and leg by leg detail from a live slip was more noise than help. Legs can still be
+added by hand on the bet form when one is worth tracking on the player check list.
 
 Odds and handicap numbers are read several times at different scales and contrasts,
 and the reading that wins the most votes is used — a single pass misreads `8.11` as

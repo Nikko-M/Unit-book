@@ -3054,7 +3054,7 @@ function parseSlip(lines,icons,img,scale){
       let mkt=isLine?(market&&market.toLowerCase().indexOf(selection.toLowerCase())<0
             ?selection+' '+market:(market||selection))
           :(market||selection);
-      return {player,market:mkt.replace(/\s+/g,' ').trim(),result:'pending',price:p.price,_lines:block};
+      return {player,market:mkt.replace(/\s+/g,' ').trim(),result:'pending',price:p.price,_event:event,_lines:block};
     }).filter(legHasSubstance);
     if(out.legs.length>=2){
       out.sport=inferSport(text);
@@ -3245,6 +3245,12 @@ async function scanSlip(file){
 }
 /* Nothing is saved from a scan: the reading is dropped into the normal bet
    form so it can be checked, corrected and logged like any other bet. */
+/* True when the legs are on different matches, so one event line would mislead. */
+function multiEvents(bet){
+  const evs=new Set();
+  for(const l of bet.legs){const e=(l._event||'').trim();if(e)evs.add(e.toLowerCase())}
+  return evs.size>1;
+}
 function applyScan(bet){
   const found=[];
   openBet(null);
@@ -3254,14 +3260,21 @@ function applyScan(bet){
   if(bet.bookmaker){$('#f-book-'+(bet.bookmaker==='Betcha'?'betcha':'tab')).checked=true;found.push(bet.bookmaker)}
   if(bet.date){$('#f-date').value=bet.date;found.push(fmtDate(bet.date))}
   if(bet.sport){$('#f-sport').value=bet.sport;buildLeagueUi();found.push(bet.sport)}
+  /* Only the odds, the stake and what the bet was. Leg by leg detail is left
+     alone -- live scores and progress rows made it more noise than help, and the
+     legs editor is still there by hand when a leg actually needs tracking. */
+  setBetType('single');
   const multi=bet.legs.length>1;
-  setBetType(multi?'multi':'single');
   let sel=bet.selection||'';
   if(sel&&bet.event&&sel.toLowerCase().indexOf(bet.event.toLowerCase())<0)sel=sel+' \u2014 '+bet.event;
   if(multi){
-    sel=(bet.betType||'Multi')+' ('+bet.legs.length+' legs)'+(bet.event?': '+bet.event:'');
-    setLegEditor(bet.legs.map(l=>({player:l.player||'',market:l.market||'',result:l.result||'pending'})));
-    found.push(bet.legs.length+' legs');
+    const names=bet.legs.map(l=>(l.player||l.market||'').trim()).filter(Boolean);
+    const n=bet.legCount||bet.legs.length;
+    sel=(bet.betType||'Multi')+' ('+n+' legs)';
+    if(bet.event&&!multiEvents(bet))sel+=': '+bet.event;
+    else if(names.length)sel+=': '+names.join(', ');
+    if(sel.length>150)sel=sel.slice(0,147).replace(/[,\s]+$/,'')+'\u2026';
+    found.push(n+' legs');
   }else if(!sel&&bet.legs.length===1){
     const l=bet.legs[0];
     sel=[l.player,l.market].filter(Boolean).join(' ').trim();

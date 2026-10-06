@@ -2765,7 +2765,21 @@ const SPORT_WORDS=[
 /* Lines that belong to the page rather than the bet. Slips carry a lot of this,
    and before it was filtered it turned into invented legs. */
 const CHROME=/^\s*(hide|show)\s*(more|less)?\s*$|^\s*(bet again|refresh( for updates)?|updated\b|placed\b|transaction id\b|potential return|cash ?out|edit bet|share|copy|my bets|back|done|receipt|settled|open bets?)\b|^\s*[-\u2013\u2014\u2022.:]+\s*$|^\s*\d+\s*$|^\s*\d+(\.\d+)?\s*\/\s*\d+(\.\d+)?\s*$|^\s*total runs?\s*:/i;
-const isChrome=t=>CHROME.test(String(t||'').trim());
+const CHROME_WORD=/^(more|less|hide|show|details?|close|open|expand|collapse)$/i;
+function isChrome(t){
+  const raw=String(t||'').trim();
+  if(!raw)return true;
+  const bare=raw.replace(/^[^\w$]+/,'').replace(/[^\w%)]+$/,'').trim();
+  return CHROME.test(raw)||CHROME.test(bare)||CHROME_WORD.test(bare);
+}
+/* A leg needs a name or a market with something in it; anything shorter is
+   page furniture that survived the column clean. */
+function legHasSubstance(l){
+  const p=(l.player||'').trim(),m=(l.market||'').trim();
+  if(isChrome(p+' '+m))return false;
+  if(p)return true;
+  return m.length>=6&&/\s|\d/.test(m);
+}
 let tessWorker=null,scanBusy=false;
 
 function canvasOf(w,h){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));return c}
@@ -3027,10 +3041,10 @@ function parseSlip(lines,icons,img,scale){
     }
   }
   out.legs=groups.filter(g=>g.lines.length).map(g=>{
-    const texts=g.lines.map(clean).filter(Boolean);
+    const texts=g.lines.map(clean).filter(t=>t&&!isChrome(t));
     const p=parseLeg(texts);
     return Object.assign(p,{result:g.blob?(g.blob.kind==='red'?'miss':'hit'):'pending',_lines:g.lines});
-  });
+  }).filter(legHasSubstance);
   if(!out.status&&out.legs.some(l=>l.result==='miss'))out.status='lost';
   if(!out.status&&out.legs.length&&out.legs.every(l=>l.result==='hit'))out.status='won';
   out.sport=inferSport(text);

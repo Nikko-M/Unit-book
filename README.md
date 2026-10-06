@@ -116,6 +116,26 @@ Missing fields are filled with sane defaults on import.
 
 ---
 
+## Reading a bet slip from a screenshot
+
+The hosted build has a camera button beside **Log bet**. Pick a screenshot of a
+slip and it reads it on your device with [Tesseract](https://tesseract.projectnaptha.com/),
+then drops what it found into the normal bet form for you to check before logging.
+Nothing is uploaded and no API key is involved; the recogniser downloads once
+from a CDN and is then cached by the browser.
+
+It reads the bookmaker, date, sport, selection, odds, stake, and for a multi each
+leg's player and market. Where a slip has already settled it also reads the green
+ticks and red crosses beside each leg, so the legs come in already marked.
+
+Odds and handicap numbers are read several times at different scales and contrasts,
+and the reading that wins the most votes is used — a single pass misreads `8.11` as
+`8` often enough to matter. Even so the form always opens for a check: a scan never
+saves a bet on its own.
+
+It is not offered when the page runs as a Claude artifact, where the recogniser
+cannot be loaded.
+
 ## Running it locally
 
 Needs a server — ES module imports and Firebase auth will not work from a `file://` URL.

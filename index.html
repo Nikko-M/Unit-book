@@ -367,6 +367,10 @@ button,input,select{font-family:inherit}
 .scan-bar::-moz-progress-bar{background:var(--ink);border-radius:99px}
 .scan-note{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:var(--surface-2);
   color:var(--ink-2);font-size:13.5px;line-height:1.45}
+.drop-hint{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(2px)}
+.drop-hint div{border:2px dashed var(--line-2);border-radius:18px;padding:26px 34px;
+  background:var(--surface);color:var(--ink);font:600 17px var(--sans);box-shadow:var(--shadow)}
 .fab-mini{width:52px;height:52px;flex:none;display:inline-flex;align-items:center;justify-content:center;
   border-radius:99px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);
   box-shadow:var(--shadow);cursor:pointer}
@@ -497,7 +501,7 @@ button,input,select{font-family:inherit}
       <button class="icon-btn" id="btn-settings" data-act="settings" aria-label="Settings" title="Settings"></button>
       <button class="icon-btn" id="btn-refresh" data-act="refresh" aria-label="Refresh" title="Refresh"></button>
       <button class="icon-btn" id="btn-theme" data-act="theme"></button>
-      <button class="icon-btn hosted-only" id="btn-scan" data-act="scan" aria-label="Scan a bet slip" title="Scan a bet slip" hidden></button>
+      <button class="icon-btn hosted-only" id="btn-scan" data-act="scan" aria-label="Scan a bet slip" title="Scan a bet slip \u2014 or paste one with Ctrl/Cmd+V" hidden></button>
       <button class="btn primary desktop-only" data-act="log">Log bet</button>
     </div>
   </header>
@@ -630,6 +634,7 @@ button,input,select{font-family:inherit}
   <button class="fab" data-act="log" aria-label="Log a bet"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Log bet</button>
 </div>
 <input type="file" id="scan-file" accept="image/*" hidden>
+<div class="drop-hint" id="drop-hint" hidden aria-hidden="true"><div>Drop a slip to read it</div></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <!-- Log / edit a bet -->
@@ -795,6 +800,7 @@ button,input,select{font-family:inherit}
     <progress id="scan-bar" class="scan-bar" max="1"></progress>
     <p class="form-error" id="scan-error" role="alert"></p>
     <p class="hint">It all happens on your device — the picture is never uploaded.</p>
+    <p class="hint">You can also paste a slip with Ctrl/Cmd+V, or drag the image onto the page.</p>
     <div class="actions">
       <button class="btn ghost" type="button" id="scan-retry" data-act="scan" hidden>Try another image</button>
       <button class="btn ghost" type="button" data-act="close">Cancel</button>
@@ -2782,7 +2788,7 @@ function legHasSubstance(l){
   if(p)return true;
   return m.length>=6&&/\s|\d/.test(m);
 }
-let tessWorker=null,scanBusy=false;
+let tessWorker=null,scanBusy=false,scanOn=false;
 
 function canvasOf(w,h){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));return c}
 function ctx2d(c){return c.getContext('2d',{willReadFrequently:true})}
@@ -3052,11 +3058,51 @@ function parseSlip(lines,icons,img,scale){
   out.sport=inferSport(text);
   return out;
 }
+/* A slip usually arrives on the clipboard or as a dragged file, so take it
+   from there as well as from the picker. */
+function fileFromItems(items){
+  for(const it of items||[]){
+    if(it.kind==='file'&&/^image\//.test(it.type||'')){const f=it.getAsFile();if(f)return f}
+  }
+  return null;
+}
+function wireScanInput(){
+  document.addEventListener('paste',e=>{
+    if(!scanOn||scanBusy)return;
+    const f=fileFromItems(e.clipboardData&&e.clipboardData.items);
+    if(!f)return;                       // pasting text anywhere is left alone
+    e.preventDefault();
+    scanSlip(f);
+  });
+  let dragDepth=0;
+  const drop=$('#drop-hint');
+  const show=on=>{drop.hidden=!on};
+  document.addEventListener('dragenter',e=>{
+    if(!scanOn||scanBusy)return;
+    if(!e.dataTransfer||Array.prototype.indexOf.call(e.dataTransfer.types||[],'Files')<0)return;
+    dragDepth++;show(true);
+  });
+  document.addEventListener('dragover',e=>{
+    if(!scanOn||scanBusy)return;
+    if(!e.dataTransfer||Array.prototype.indexOf.call(e.dataTransfer.types||[],'Files')<0)return;
+    e.preventDefault();e.dataTransfer.dropEffect='copy';
+  });
+  document.addEventListener('dragleave',()=>{if(dragDepth>0)dragDepth--;if(!dragDepth)show(false)});
+  document.addEventListener('drop',e=>{
+    if(!scanOn||scanBusy)return;
+    const f=fileFromItems(e.dataTransfer&&e.dataTransfer.items)
+      ||((e.dataTransfer&&e.dataTransfer.files||[])[0]);
+    dragDepth=0;show(false);
+    if(!f||!/^image\//.test(f.type||''))return;
+    e.preventDefault();
+    scanSlip(f);
+  });
+}
 function loadScript(src){
   return new Promise((res,rej)=>{
     const s=document.createElement('script');
     s.src=src;s.async=true;
-    s.onload=res;s.onerror=()=>rej(new Error('load failed'));
+    s.onload=res;s.onerror=()=>rej(new Error('The slip reader could not be downloaded. Check your connection and try again.'));
     document.head.appendChild(s);
   });
 }
@@ -3211,10 +3257,10 @@ async function init(){
   $$('.tabs button').forEach(b=>{const ic=$('.nav-ic',b);if(ic)ic.innerHTML=NAV_IC[b.dataset.tab]||''});
   $$('.sheet-head .icon-btn').forEach(b=>{b.innerHTML=ICON.close});
   try{const t=localStorage.getItem('unitbook-tab');if(t==='players'||t==='class')state.tab=t}catch(e){}
-  if(!(window.claude&&typeof window.claude.use==='function')){
-    $('#btn-scan').hidden=false;
-    $('.fab-mini').hidden=false;
-  }
+  $('#btn-scan').hidden=false;
+  $('.fab-mini').hidden=false;
+  scanOn=true;
+  wireScanInput();
   setTab(state.tab);
   state.settings.theme=cachedTheme();
   applyTheme(state.settings.theme);

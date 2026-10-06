@@ -118,8 +118,9 @@ Missing fields are filled with sane defaults on import.
 
 ## Reading a bet slip from a screenshot
 
-The hosted build has a camera button beside **Log bet**. Pick a screenshot of a
-slip and it reads it on your device with [Tesseract](https://tesseract.projectnaptha.com/),
+There are three ways in: **paste** a slip with Ctrl/Cmd+V, **drag** the image onto
+the page, or use the camera button beside **Log bet**. Pasting is usually quickest —
+screenshot the slip, paste, done. However it arrives, it is read on your device with [Tesseract](https://tesseract.projectnaptha.com/),
 then drops what it found into the normal bet form for you to check before logging.
 Nothing is uploaded and no API key is involved; the recogniser downloads once
 from a CDN and is then cached by the browser.
@@ -133,8 +134,8 @@ and the reading that wins the most votes is used — a single pass misreads `8.1
 `8` often enough to matter. Even so the form always opens for a check: a scan never
 saves a bet on its own.
 
-It is not offered when the page runs as a Claude artifact, where the recogniser
-cannot be loaded.
+If the recogniser cannot be downloaded — no connection, or a page policy that
+blocks the CDN — it says so rather than failing quietly.
 
 ## Running it locally
 

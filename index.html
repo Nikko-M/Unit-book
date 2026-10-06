@@ -2026,7 +2026,9 @@ function openOverlay(sel,focusSel){
   if(f)f.focus();
 }
 function closeOverlays(){
-  $$('.overlay').forEach(o=>{o.hidden=true});
+  /* The sign-in gate is not dismissible: closing it would leave an app shell
+     with nothing in it and no way back except a reload. */
+  $$('.overlay').forEach(o=>{if(o.id!=='auth-gate')o.hidden=true});
   document.body.classList.remove('lock');
   if(lastFocus&&lastFocus.focus){try{lastFocus.focus()}catch(e){}}
   lastFocus=null;

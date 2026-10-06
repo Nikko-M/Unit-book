@@ -2772,7 +2772,7 @@ const SPORT_WORDS=[
 ];
 /* Lines that belong to the page rather than the bet. Slips carry a lot of this,
    and before it was filtered it turned into invented legs. */
-const CHROME=/^\s*(hide|show)\s*(more|less)?\s*$|^\s*(bet again|refresh( for updates)?|updated\b|placed\b|transaction id\b|potential return|cash ?out|edit bet|share|copy|my bets|back|done|receipt|settled|open bets?)\b|^\s*[-\u2013\u2014\u2022.:]+\s*$|^\s*\d+\s*$|^\s*\d+(\.\d+)?\s*\/\s*\d+(\.\d+)?\s*$|^\s*total runs?\s*:/i;
+const CHROME=/^\s*(hide|show)\b[^$]{0,30}$|^\s*(bet again|refresh( for updates)?|updated\b|placed\b|transaction id\b|potential return|cash ?out|edit bet|share|copy|my bets|back|done|receipt|settled|open bets?)\b|^\s*[-\u2013\u2014\u2022.:]+\s*$|^\s*\d+\s*$|^\s*\d+(\.\d+)?\s*\/\s*\d+(\.\d+)?\s*$|^\s*total runs?\s*:/i;
 const CHROME_WORD=/^(more|less|hide|show|details?|close|open|expand|collapse)$/i;
 function isChrome(t){
   const raw=String(t||'').trim();
@@ -3018,6 +3018,50 @@ function parseSlip(lines,icons,img,scale){
   const clean=l=>l.words.filter(w=>w.bbox.x0>=contentLeft-18&&w.bbox.x1<=iconLeft+4)
     .map(w=>w.text).join(' ')
     .replace(/\s*[\[\(][^\]\)]{0,3}[\]\)]\s*$/,'').replace(/\s+[@©&€®]+\s*$/,'').trim();
+  /* A plain multi gives every leg its own price on the right. That is a far better
+     boundary than spacing, and it lets each leg be read structurally: the priced
+     line is the selection, the line under it the market, and everything else --
+     live scores, set scores, refresh rows, progress blocks -- is ignored. */
+  /* Take the right edge from the text itself rather than the image, so this holds
+     whatever scale the page was read at and whatever margins the slip has. */
+  const rightEdge=lines.length?Math.max.apply(null,lines.map(l=>l.bbox.x1)):0;
+  const priceIdx=[];
+  legLines.forEach((l,i)=>{
+    const hit=l.words.find(wd=>/^\d{1,3}\.\d{2}$/.test(String(wd.text))
+      &&+wd.text>=1.01&&+wd.text<=1000&&wd.bbox.x0>rightEdge*0.72);
+    if(hit)priceIdx.push({i,price:+hit.text,word:hit});
+  });
+  if(priceIdx.length>=2){
+    const EVENT=/\s(vs?\.?|v)\s/i;
+    const TIMEY=/\b\d{1,2}:\d{2}\s*(am|pm)?\b|\b(mon|tue|wed|thu|fri|sat|sun)/i;
+    out.legs=priceIdx.map((p,k)=>{
+      const from=p.i, to=(k+1<priceIdx.length)?priceIdx[k+1].i:legLines.length;
+      const block=legLines.slice(from,to);
+      const texts=block.map(l=>{
+        let t=l.words.filter(wd=>wd!==p.word&&wd.bbox.x0<rightEdge*0.72).map(wd=>wd.text).join(' ').trim();
+        return t;
+      }).filter(t=>t&&!isChrome(t));
+      const selection=(texts[0]||'').trim();
+      const event=(texts.find(t=>EVENT.test(t))||'').trim();
+      let market='';
+      for(let j=1;j<texts.length;j++){
+        const t=texts[j];
+        if(t===event||EVENT.test(t)||TIMEY.test(t))continue;
+        market=t;break;
+      }
+      const isLine=/^(over|under|o\/u|\+|-|\d)/i.test(selection);
+      const player=isLine?'':selection;
+      let mkt=isLine?(market&&market.toLowerCase().indexOf(selection.toLowerCase())<0
+            ?selection+' '+market:(market||selection))
+          :(market||selection);
+      return {player,market:mkt.replace(/\s+/g,' ').trim(),result:'pending',price:p.price,_lines:block};
+    }).filter(legHasSubstance);
+    if(out.legs.length>=2){
+      out.sport=inferSport(text);
+      return out;
+    }
+  }
+
   let groups=[];
   if(blobs.length){
     groups=blobs.map(b=>({blob:b,lines:[]}));

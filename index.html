@@ -249,6 +249,17 @@ button,input,select{font-family:inherit}
 .sheet{background:var(--surface);color:var(--ink);width:100%;max-width:520px;max-height:92vh;max-height:92dvh;overflow:auto;border-radius:22px 22px 0 0;padding:18px 18px calc(20px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow);animation:sheet-in .22s ease-out}
 @keyframes sheet-in{from{transform:translateY(26px);opacity:0}to{transform:none;opacity:1}}
 @media (min-width:640px){.overlay{align-items:center}.sheet{border-radius:22px;padding-bottom:20px}}
+/* The bet form is the long one -- a five leg multi runs well past a phone-sized
+   sheet -- so give it the room a desktop has. */
+@media (min-width:760px){
+  #bet-overlay .sheet{max-width:760px;max-height:94vh;max-height:94dvh;padding:22px 24px}
+  #bet-overlay .row2{gap:18px}
+}
+@media (min-width:1100px){#bet-overlay .sheet{max-width:880px}}
+@media (min-width:700px){
+  #bet-overlay #leg-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  #bet-overlay #leg-list .leg{margin:0}
+}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 .sheet-head h2{font:700 22px/1.1 var(--display);letter-spacing:-.02em;margin:0}
 .field{margin:0 0 15px;border:0;padding:0;min-width:0}
@@ -2774,11 +2785,14 @@ const SPORT_WORDS=[
    and before it was filtered it turned into invented legs. */
 const CHROME=/^\s*(hide|show)\b[^$]{0,30}$|^\s*(bet again|refresh( for updates)?|updated\b|placed\b|transaction id\b|potential return|cash ?out|edit bet|share|copy|my bets|back|done|receipt|settled|open bets?)\b|^\s*[-\u2013\u2014\u2022.:]+\s*$|^\s*\d+\s*$|^\s*\d+(\.\d+)?\s*\/\s*\d+(\.\d+)?\s*$|^\s*total runs?\s*:/i;
 const CHROME_WORD=/^(more|less|hide|show|details?|close|open|expand|collapse)$/i;
+/* Promotion banners sit in the middle of the legs and read like one. Matched
+   anywhere in the line, since they run on. */
+const PROMO=/sgm cover|get your stake back|bonus cash|money ?back|t&\s*c|terms\s*(and|&)\s*conditions|apply\b.*$|if \d+ legs? fails?|insurance|boost(ed)? (odds|price)|free bet/i;
 function isChrome(t){
   const raw=String(t||'').trim();
   if(!raw)return true;
   const bare=raw.replace(/^[^\w$]+/,'').replace(/[^\w%)]+$/,'').trim();
-  return CHROME.test(raw)||CHROME.test(bare)||CHROME_WORD.test(bare);
+  return CHROME.test(raw)||CHROME.test(bare)||CHROME_WORD.test(bare)||PROMO.test(raw);
 }
 /* A leg needs a name or a market with something in it; anything shorter is
    page furniture that survived the column clean. */
@@ -2788,8 +2802,13 @@ function tidyName(t){
   let out=String(t||'').replace(/^[^\w(]+/,'').replace(/\s+/g,' ').trim();
   out=out.replace(/^(?:[^\w\s]\S{0,2}\s+)/,'');
   const m=out.match(/^(\S{1,2})\s+(\S.*)$/);
-  if(m&&!/^(at|in|to|on|vs|v|no|up)$/i.test(m[1])&&!/[a-z]{2}/.test(m[1])
-    &&(!/^\d/.test(m[1])||/^[A-Za-z]/.test(m[2])))out=m[2];
+  if(m){
+    const tok=m[1], alnum=tok.replace(/[^\w]/g,'');
+    /* An icon artefact is a single character, or a scrap with at most one capital
+       in it. "8+" or "3.5" leading a market is not an artefact. */
+    const artefact=tok.length===1||alnum===''||(alnum.length===1&&/[A-Za-z]/.test(alnum));
+    if(artefact&&!/^(at|in|to|on|vs|v|no|up|a|i)$/i.test(tok))out=m[2];
+  }
   return out.replace(/^[^\w(]+/,'').trim();
 }
 function legHasSubstance(l){
@@ -2937,7 +2956,6 @@ function parseLeg(lines){
     const all=txt.join(' ').replace(/\s+/g,' ').trim();
     const m=all.match(/^(.*?)\s*\(([^)]*)\)\s*(.*)$/);
     if(m){player=m[1].trim();market=m[3].trim()}else market=all;
-    market=market.replace(/^To Have\s+/i,'');
   }
   market=market.replace(/\b(\w)/,c=>c.toUpperCase());
   return {player,market};
@@ -2995,7 +3013,7 @@ function parseSlip(lines,icons,img,scale){
   }
 
   const iStake=lines.findIndex(l=>/Stake/i.test(l.text));
-  let iFoot=lines.findIndex((l,i)=>i>iStake&&/(betting becoming|gambling|helpline|18\+|responsib|transaction id|placed\s*:|bet again)/i.test(l.text));
+  let iFoot=lines.findIndex((l,i)=>i>iStake&&/(betting becoming|gambl|helpline|18\+\s*only|responsib|transaction id|placed\s*:|bet again|combine remaining)/i.test(l.text));
   if(iFoot<0)iFoot=lines.length;
   const legLines=lines.slice(iStake+1,iFoot).filter(l=>!isChrome(l.text));
 

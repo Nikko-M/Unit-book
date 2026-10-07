@@ -367,6 +367,7 @@ button,input,select{font-family:inherit}
 .auth-sub{margin:0 0 22px;color:var(--ink-2);font-size:14.5px;line-height:1.5}
 .auth-btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:10px}
 .auth-foot{margin:16px 0 0;font-size:12.5px;color:var(--muted);min-height:1em}
+.build-line{margin:0 0 14px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .acct-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:4px}
 .acct-who{font-size:13.5px;color:var(--ink-2);overflow-wrap:anywhere}
 
@@ -892,6 +893,7 @@ button,input,select{font-family:inherit}
         <input class="input" type="text" inputmode="decimal" id="s-unit" placeholder="Optional, e.g. 20">
         <p class="hint">When set, NZ$ amounts appear next to your units. Leave blank to show units only.</p>
       </div>
+      <p class="build-line" id="build-line"></p>
       <div class="field" id="acct-field" hidden>
         <label>Account</label>
         <div class="acct-row">
@@ -2347,6 +2349,7 @@ function openSettings(){
   $('#s-start').value=state.settings.startBankroll==null?'':String(state.settings.startBankroll);
   $('#s-unit').value=state.settings.unitValue==null?'':String(state.settings.unitValue);
   $('#set-error').textContent='';
+  $('#build-line').textContent='Build '+BUILD.stamp+' ('+BUILD.sha+')';
   const hosted=!!fbUser;
   $('#acct-field').hidden=!hosted;
   $('#import-field').hidden=!hosted;
@@ -2653,6 +2656,7 @@ const FIREBASE_CONFIG={
   projectId:"unit-book",
   appId:"1:940175182512:web:262a54e814b3b65b6b8975"
 };
+const BUILD={stamp:'2026-10-07 12:57 UTC',sha:'f63699b'};
 const FB_BASE='https://www.gstatic.com/firebasejs/10.12.2/';
 let fbAuthMod=null,fbAuth=null,fbUser=null;
 

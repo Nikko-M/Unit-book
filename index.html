@@ -371,6 +371,18 @@ button,input,select{font-family:inherit}
 .acct-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:4px}
 .acct-who{font-size:13.5px;color:var(--ink-2);overflow-wrap:anywhere}
 
+.rv{cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px 12px;align-items:start;
+  padding:12px 0;border-top:1px solid var(--line)}
+.rv:first-child{border-top:0}
+.rv-off{opacity:.45}
+.rv-pick{margin:2px 0 0;width:18px;height:18px;accent-color:var(--ink)}
+.rv-main{min-width:0;display:block}
+.rv-sel{display:block;font-weight:600;font-size:14.5px;line-height:1.3;overflow-wrap:anywhere}
+.rv-sub{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+.rv-pl{text-align:right;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rv-pl small{display:block;font-size:11.5px;font-weight:500;opacity:.85}
+.rv-total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  margin-top:4px;padding-top:12px;border-top:2px solid var(--line-2);font-weight:700;font-size:16px}
 .scan-preview{display:block;width:100%;max-height:230px;object-fit:contain;border-radius:12px;background:var(--surface-2);margin:0 0 14px}
 .scan-msg{margin:0 0 8px;font-size:14.5px;color:var(--ink-2);min-height:1.2em}
 .scan-bar{width:100%;height:6px;appearance:none;border:0;border-radius:99px;background:var(--surface-2);margin:0 0 12px}
@@ -799,6 +811,22 @@ button,input,select{font-family:inherit}
     </button>
     <p class="form-error" id="auth-error" role="alert"></p>
     <p class="auth-foot" id="auth-foot"></p>
+  </div>
+</div>
+<div class="overlay" id="review-overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="review-title">
+    <div class="sheet-head">
+      <h2 id="review-title">Bets read from your screenshot</h2>
+      <button class="icon-btn" type="button" data-act="close" aria-label="Close"></button>
+    </div>
+    <p class="hint" id="review-note"></p>
+    <div id="review-list"></div>
+    <div class="rv-total" id="review-total"></div>
+    <p class="form-error" id="review-error" role="alert"></p>
+    <div class="actions">
+      <button class="btn primary" type="button" id="review-save">Log these bets</button>
+      <button class="btn ghost" type="button" data-act="close">Cancel</button>
+    </div>
   </div>
 </div>
 <div class="overlay" id="scan-overlay" hidden>
@@ -2484,6 +2512,17 @@ $('#acct-out').addEventListener('click',()=>{closeOverlays();fbLogout()});
 $('#import-file').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(f)importBackup(f);e.target.value=''});
 $('#loss-form').addEventListener('submit',saveLossReason);
 $('#cash-form').addEventListener('submit',saveCashOut);
+$('#review-save').addEventListener('click',saveReview);
+$('#review-list').addEventListener('change',e=>{
+  const cb=e.target.closest('.rv-pick');
+  if(!cb)return;
+  const r=reviewRows[+cb.dataset.i];
+  if(!r)return;
+  r.on=cb.checked;
+  const row=cb.closest('.rv');
+  if(row)row.classList.toggle('rv-off',!r.on);
+  updateReviewTotal();
+});
 $('#scan-file').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(f)scanSlip(f);e.target.value=''});
 $('#c-amount').addEventListener('input',renderCashPreview);
 $('#f-selection').addEventListener('input',buildPlayerUi);
@@ -2964,6 +3003,32 @@ function parseLeg(lines){
   market=market.replace(/\b(\w)/,c=>c.toUpperCase());
   return {player,market};
 }
+/* A history screen shows several bets at once. Each one runs from its priced
+   header to just before the next, and carries exactly one Stake row. */
+function splitBetBlocks(lines){
+  if(!lines.length)return [lines];
+  /* A real stake row carries an amount. "Get your stake back as Bonus Cash" does
+     not, and counting it would split one bet in two. */
+  const STAKE_ROW=/\bstake\b\s*[:\-]?\s*[\$S]?\s*\d/i;
+  const stakeAt=[];
+  lines.forEach((l,i)=>{if(STAKE_ROW.test(l.text)&&!isChrome(l.text))stakeAt.push(i)});
+  if(stakeAt.length<2)return [lines];   // one bet, however many priced legs it has
+  const rightEdge=Math.max.apply(null,lines.map(l=>l.bbox.x1));
+  const priced=i=>lines[i].words.some(wd=>/^\d{1,3}\.\d{2}$/.test(String(wd.text))
+    &&+wd.text>=1.01&&+wd.text<=1000&&wd.bbox.x0>rightEdge*0.72);
+  /* Each bet owns one Stake row, so the bet starts at the priced header nearest
+     above it. Walking back from the Stake row keeps a multi's priced legs, which
+     sit below their own Stake row, from looking like new bets. */
+  const starts=[0];
+  for(let k=1;k<stakeAt.length;k++){
+    let i=stakeAt[k];
+    while(i>stakeAt[k-1]+1&&!priced(i))i--;
+    if(i>stakeAt[k-1])starts.push(i);
+  }
+  const blocks=[];
+  for(let k=0;k<starts.length;k++)blocks.push(lines.slice(starts[k],k+1<starts.length?starts[k+1]:lines.length));
+  return blocks.filter(b=>b.some(l=>STAKE_ROW.test(l.text)&&!isChrome(l.text)));
+}
 function parseSlip(lines,icons,img,scale){
   const text=lines.map(l=>l.text).join('\n');
   const out={bookmaker:null,date:null,sport:null,odds:null,stakeDollars:null,
@@ -2978,8 +3043,8 @@ function parseSlip(lines,icons,img,scale){
   if(/No\s*Ret[uv]rn/i.test(text))out.status='lost';
   else if(/Cash(ed)?\s*Out/i.test(text))out.status='cashout';
   else if(/\b(Void|Refund(ed)?)\b/i.test(text))out.status='void';
-  else if(/\b(Won|Winner|Paid|Returned)\b/i.test(text))out.status='won';
-  const rt=text.match(/\b(?:Return(?:ed)?|Paid|Payout|Collect(?:ed)?)\s*[:\-]?\s*[\$S]\s*(\d[\d,]*\.\d{2})/i);
+  else if(/\b(Won|Winner|Paid|Returned)\b/i.test(text)||/\bWin\b\s*[+\-]?\s*[\$S]/i.test(text))out.status='won';
+  const rt=text.match(/\b(?:Return(?:ed)?|Paid|Payout|Collect(?:ed)?|Win)\b\s*[:\-]?\s*[+\-]?\s*[\$S]\s*(\d[\d,]*\.\d{2})/i);
   if(rt&&!/No\s*Return/i.test(rt[0]))out.returnDollars=+rt[1].replace(/,/g,'');
   const tl=lines.find(l=>/(Same Game Multi|Multi|Single|Double|Treble|Trixie|Parlay)/i.test(l.text));
   if(tl){const m=tl.text.match(/(Same Game Multi|Multi|Single|Double|Treble|Trixie|Parlay)/i);
@@ -3224,7 +3289,13 @@ async function scanSlip(file){
     const r=await tessWorker.recognize(main,{},{blocks:true,text:true});
     const lines=linesOf(r);
     const icons=findIcons(img);
-    const bet=parseSlip(lines,icons,img,scale);
+    const blocks=splitBetBlocks(lines);
+    const all=blocks.map(b=>{
+      const y0=b[0].bbox.y0,y1=b[b.length-1].bbox.y1;
+      const mine={blobs:icons.blobs.filter(bl=>bl.y*scale>=y0&&bl.y*scale<=y1),edge:icons.edge};
+      return parseSlip(b,mine,img,scale);
+    });
+    const bet=all[0]||parseSlip(lines,icons,img,scale);
 
     scanStatus('Checking the numbers…',null);
     const V=[{sharpen:1.2,contrast:true,mult:1.5},{sharpen:1.2,contrast:true,mult:3},
@@ -3266,6 +3337,18 @@ async function scanSlip(file){
     }
     URL.revokeObjectURL(r0.url);
     closeOverlays();
+    if(all.length>1){
+      if(state.storage!=='ok'){toast('Still loading. Try again in a moment.');return}
+      reviewRows=all.map(b=>({bet:scanToBet(b),on:true}));
+      const settled=reviewRows.filter(r=>r.bet.status!=='pending').length;
+      $('#review-note').textContent=reviewRows.length+' bets read'
+        +(settled?', '+settled+' already settled':'')
+        +'. Check them over \u2014 untick anything you have logged before.';
+      $('#review-error').textContent='';
+      renderReview();
+      openOverlay('#review-overlay');
+      return;
+    }
     applyScan(bet);
   }catch(e){
     scanStatus('',null);
@@ -3277,6 +3360,86 @@ async function scanSlip(file){
 }
 /* Nothing is saved from a scan: the reading is dropped into the normal bet
    form so it can be checked, corrected and logged like any other bet. */
+/* Turn a parsed slip into the bet record the rest of the app uses. */
+function scanToBet(bet){
+  const u=state.settings.unitValue;
+  const stake=(bet.stakeDollars!=null&&u>0)?bet.stakeDollars/u:(bet.stakeDollars!=null?bet.stakeDollars:0);
+  const n=bet.legCount||bet.legs.length;
+  let sel=bet.selection||'';
+  if(sel&&bet.event&&sel.toLowerCase().indexOf(bet.event.toLowerCase())<0)sel=sel+' \u2014 '+bet.event;
+  if(n>1){
+    sel=(bet.betType||'Multi')+' ('+n+' legs)';
+    if(bet.event)sel+=': '+bet.event;
+  }else if(!sel&&bet.event)sel=bet.event;
+  let status=bet.status||'pending',cashout=null,cashoutCash=null;
+  const odds=bet.odds||0;
+  /* A payout that matches neither a win nor the stake is a partial settle, so
+     record what was actually returned rather than assuming a clean win. */
+  if(status==='won'&&bet.returnDollars!=null&&u>0&&odds>1&&stake>0){
+    const full=stake*odds, profitOnly=stake*(odds-1), got=bet.returnDollars/u;
+    const near=(a,b)=>Math.abs(a-b)<=Math.max(0.02,b*0.02);
+    if(!near(got,full)&&!near(got,profitOnly)){
+      status='cashout';cashout=got;cashoutCash=bet.returnDollars;
+    }
+  }
+  return {
+    bookmaker:bet.bookmaker==='Betcha'?'Betcha':'TAB',
+    date:bet.date||todayNZ(),
+    sport:canonSport(bet.sport||'Other'),
+    league:'',player:'',reason:'',notes:'',lossReason:'',
+    selection:sel||'Bet from a screenshot',
+    odds:Math.round(odds*1000)/1000,
+    stake:Math.round(stake*100000)/100000,
+    stakeCash:bet.stakeDollars!=null?bet.stakeDollars:null,
+    cashout,cashoutCash,bonusBack:null,bonusBackCash:null,bonus:false,
+    status,
+    legs:bet.legs.map(l=>({player:tidyName(l.player||''),market:tidyName(l.market||''),result:l.result||'pending'})),
+    createdAt:Date.now(),
+    settledAt:status==='pending'?null:Date.now(),
+    updatedAt:Date.now()
+  };
+}
+let reviewRows=[];
+function renderReview(){
+  const host=$('#review-list');
+  host.innerHTML=reviewRows.map((r,i)=>{
+    const c=calc(r.bet);
+    const pl=r.bet.status==='pending'?fmtU(c.toWin,true)+' to win':fmtU(c.profit,true);
+    const cls=r.bet.status==='pending'?'muted':plClass(c.profit);
+    const sub=[STATUS_LABEL[r.bet.status],fmtDate(r.bet.date),fmtOdds(r.bet.odds)+' \u00d7 '+fmtStake(r.bet.stake)+'u']
+      .filter(Boolean).join(' \u00b7 ');
+    return '<label class="rv'+(r.on?'':' rv-off')+'">'+
+      '<input type="checkbox" class="rv-pick" data-i="'+i+'"'+(r.on?' checked':'')+'>'+
+      '<span class="rv-main"><span class="rv-sel">'+esc(r.bet.selection)+'</span>'+
+      '<span class="rv-sub">'+esc(sub)+'</span></span>'+
+      '<span class="rv-pl '+cls+'">'+esc(pl)+
+        (hasUnitValue()&&r.bet.status!=='pending'?'<small>'+esc(fmtD(c.profit,true))+'</small>':'')+
+      '</span></label>';
+  }).join('');
+  updateReviewTotal();
+}
+/* Ticking a row must not rebuild the list: that would replace the checkbox
+   mid-click and drop the change. */
+function updateReviewTotal(){
+  const picked=reviewRows.filter(r=>r.on);
+  const a=agg(picked.map(r=>r.bet));
+  $('#review-total').innerHTML='<span>'+picked.length+(picked.length===1?' bet':' bets')+'</span>'+
+    '<span class="'+plClass(a.net)+'">'+esc(fmtU(a.net,true))+
+      (hasUnitValue()?' <span class="muted" style="font-weight:500">'+esc(fmtD(a.net,true))+'</span>':'')+'</span>';
+  $('#review-save').disabled=!picked.length;
+}
+async function saveReview(){
+  const picked=reviewRows.filter(r=>r.on).map(r=>r.bet);
+  if(!picked.length)return;
+  const btn=$('#review-save');btn.disabled=true;
+  let done=0,failed=0;
+  for(const b of picked){
+    try{await enqueue('bet:new',()=>dbWrite(()=>betsCol.doc().set(b)));done++}catch(e){failed++}
+  }
+  closeOverlays();
+  toast(done+(done===1?' bet logged':' bets logged')+(failed?', '+failed+' failed':''));
+}
+
 /* True when the legs are on different matches, so one event line would mislead. */
 function multiEvents(bet){
   const evs=new Set();

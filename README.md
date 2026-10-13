@@ -131,6 +131,11 @@ rows and progress bars are dropped: each leg is read structurally -- the priced 
 is the selection, the line under it the market -- rather than by sweeping up
 everything between the legs.
 
+A screenshot of a bet history -- several bets at once -- is read as a list. Each
+bet's result is read with it, so "No Return" settles as a loss and "Win +$30.00"
+as a win, and a review sheet shows every bet with its P/L worked out and the total
+at the bottom. Untick anything already logged, then log the rest in one go.
+
 The selection line stays short for a multi, since the legs carry the detail: the
 match name where every leg is on the same game, otherwise just the type and count.
 

@@ -2831,9 +2831,18 @@ const CHROME_WORD=/^(more|less|hide|show|details?|close|open|expand|collapse)$/i
 /* Promotion banners sit in the middle of the legs and read like one. Matched
    anywhere in the line, since they run on. */
 const PROMO=/sgm cover|get your stake back|bonus cash|money ?back|t&\s*c|terms\s*(and|&)\s*conditions|apply\b.*$|if \d+ legs? fails?|insurance|boost(ed)? (odds|price)|free bet/i;
+/* The row that says what was risked. A bet placed with bonus cash labels it that
+   way instead of "Stake", so both have to count -- but only with an amount after
+   them, which is what separates a real stake row from "get your stake back as
+   Bonus Cash if a leg fails". The capture is the amount. */
+const STAKE_ROW=/\b(?:stake|bonus\s*cash|bonus\s*bet|free\s*bet)\b\s*[:\-]?\s*[\$S]?\s*(\d[\d,]*(?:\.\d{1,2})?)\b/i;
+const BONUS_ROW=/\b(?:bonus\s*cash|bonus\s*bet|free\s*bet)\b\s*[:\-]?\s*[\$S]?\s*\d/i;
 function isChrome(t){
   const raw=String(t||'').trim();
   if(!raw)return true;
+  /* A stake row is the bet, never furniture: checked before PROMO, which would
+     otherwise throw away a bonus-cash stake as a promotion banner. */
+  if(STAKE_ROW.test(raw))return false;
   const bare=raw.replace(/^[^\w$]+/,'').replace(/[^\w%)]+$/,'').trim();
   return CHROME.test(raw)||CHROME.test(bare)||CHROME_WORD.test(bare)||PROMO.test(raw);
 }
@@ -3007,9 +3016,6 @@ function parseLeg(lines){
    header to just before the next, and carries exactly one Stake row. */
 function splitBetBlocks(lines){
   if(!lines.length)return [lines];
-  /* A real stake row carries an amount. "Get your stake back as Bonus Cash" does
-     not, and counting it would split one bet in two. */
-  const STAKE_ROW=/\bstake\b\s*[:\-]?\s*[\$S]?\s*\d/i;
   const stakeAt=[];
   lines.forEach((l,i)=>{if(STAKE_ROW.test(l.text)&&!isChrome(l.text))stakeAt.push(i)});
   if(stakeAt.length<2)return [lines];   // one bet, however many priced legs it has
@@ -3033,13 +3039,18 @@ function parseSlip(lines,icons,img,scale){
   const text=lines.map(l=>l.text).join('\n');
   const out={bookmaker:null,date:null,sport:null,odds:null,stakeDollars:null,
     returnDollars:null,potentialReturn:null,status:null,betType:null,legCount:null,
-    event:null,selection:null,single:false,legs:[]};
+    event:null,selection:null,single:false,bonus:false,legs:[]};
   if(/betcha/i.test(text))out.bookmaker='Betcha';
   else if(/\bTAB\b/.test(text))out.bookmaker='TAB';
   else if(icons.edge){const e=icons.edge;if(e[2]>170&&e[0]<90&&e[1]<140&&e[2]-e[0]>100)out.bookmaker='Betcha'}
   out.date=inferDate(text);
-  const st=text.match(/Stake\s*[:\-]?\s*[\$S]?\s*(\d[\d,]*(?:\.\d{1,2})?)/i);
-  if(st)out.stakeDollars=+st[1].replace(/,/g,'');
+  /* Matched a line at a time, so "Stake" on one row and a figure on the next
+     cannot be read as one amount. */
+  const stLine=lines.find(l=>STAKE_ROW.test(l.text));
+  if(stLine){
+    out.stakeDollars=+stLine.text.match(STAKE_ROW)[1].replace(/,/g,'');
+    if(BONUS_ROW.test(stLine.text))out.bonus=true;   // staked with bonus cash: no turnover, nothing of its own to lose
+  }
   if(/No\s*Ret[uv]rn/i.test(text))out.status='lost';
   else if(/Cash(ed)?\s*Out/i.test(text))out.status='cashout';
   else if(/\b(Void|Refund(ed)?)\b/i.test(text))out.status='void';
@@ -3061,7 +3072,7 @@ function parseSlip(lines,icons,img,scale){
        page look like odds -- the "Bet Again" price especially -- so take candidates
        from above the stake row and prefer whichever the stake and return imply. */
     const implied=(out.stakeDollars&&out.potentialReturn)?out.potentialReturn/out.stakeDollars:null;
-    const iStakeRow=lines.findIndex(l=>/Stake/i.test(l.text));
+    const iStakeRow=lines.findIndex(l=>STAKE_ROW.test(l.text));
     const cands=[];
     lines.forEach((l,i)=>{
       if(iStakeRow>=0&&i>iStakeRow)return;
@@ -3081,7 +3092,7 @@ function parseSlip(lines,icons,img,scale){
     }else if(cands.length)out.odds=cands[0];
   }
 
-  const iStake=lines.findIndex(l=>/Stake/i.test(l.text));
+  const iStake=lines.findIndex(l=>STAKE_ROW.test(l.text));
   let iFoot=lines.findIndex((l,i)=>i>iStake&&/(betting becoming|gambl|helpline|18\+\s*only|responsib|transaction id|placed\s*:|bet again|combine remaining)/i.test(l.text));
   if(iFoot<0)iFoot=lines.length;
   const legLines=lines.slice(iStake+1,iFoot).filter(l=>!isChrome(l.text));
@@ -3391,7 +3402,7 @@ function scanToBet(bet){
     odds:Math.round(odds*1000)/1000,
     stake:Math.round(stake*100000)/100000,
     stakeCash:bet.stakeDollars!=null?bet.stakeDollars:null,
-    cashout,cashoutCash,bonusBack:null,bonusBackCash:null,bonus:false,
+    cashout,cashoutCash,bonusBack:null,bonusBackCash:null,bonus:!!bet.bonus,
     status,
     legs:bet.legs.map(l=>({player:tidyName(l.player||''),market:tidyName(l.market||''),result:l.result||'pending'})),
     createdAt:Date.now(),
@@ -3492,6 +3503,7 @@ function applyScan(bet){
         +' — set what 1 unit is worth in Settings and it can fill that in for you.';
     }
   }
+  if(bet.bonus){$('#f-bonus').checked=true;syncCashoutUi();found.push('bonus cash')}
   buildPlayerUi();updatePreview();
   const note=$('#scan-note');
   note.hidden=false;

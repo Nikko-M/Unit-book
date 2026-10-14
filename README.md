@@ -136,6 +136,12 @@ bet's result is read with it, so "No Return" settles as a loss and "Win +$30.00"
 as a win, and a review sheet shows every bet with its P/L worked out and the total
 at the bottom. Untick anything already logged, then log the rest in one go.
 
+A bet staked with bonus cash says `Bonus Cash $5.00` where the others say `Stake`,
+so that row counts as the stake and the bet comes back with Bonus bet already
+ticked. That matters for the split as much as the maths: each bet in a list is
+found by its stake row, so before this a bonus bet was swallowed into the bet
+above it.
+
 The selection line stays short for a multi, since the legs carry the detail: the
 match name where every leg is on the same game, otherwise just the type and count.
 
